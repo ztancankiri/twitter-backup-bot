@@ -1,4 +1,7 @@
 const axios = require("axios");
+const fs = require("fs");
+const FormData = require("form-data");
+const Readable = require("stream").Readable;
 const config = require("./config.json");
 
 const TELEGRAM_URL = `${config.TELEGRAM_BASE_URL}${config.TELEGRAM_BOT_TOKEN}`;
@@ -25,16 +28,38 @@ exports.sendMessage = async (chat_id, text) => {
 
 exports.sendPhoto = async (chat_id, photo, text) => {
 	try {
-		const response = await axios.get(`${TELEGRAM_URL}/sendPhoto`, {
-			params: {
-				chat_id,
-				photo,
-				caption: text.replaceAll("\\n", "\n")
-			}
-		});
+		if (Buffer.isBuffer(photo)) {
+			// fs.writeFileSync("pic.png", photo);
 
-		if (response && response.data && response.data.ok) {
-			return "OK";
+			const formData = new FormData();
+
+			// const stream = new Readable();
+			// stream.push(photo);
+			// stream.push(null);
+
+			formData.append("chat_id", chat_id);
+			formData.append("photo", photo);
+			formData.append("caption", text.replaceAll("\\n", "\n"));
+
+			const response = await axios.post(`${TELEGRAM_URL}/sendPhoto`, formData, {
+				headers: formData.getHeaders()
+			});
+
+			if (response && response.data && response.data.ok) {
+				return "OK";
+			}
+		} else {
+			const response = await axios.get(`${TELEGRAM_URL}/sendPhoto`, {
+				params: {
+					chat_id,
+					photo,
+					caption: text.replaceAll("\\n", "\n")
+				}
+			});
+
+			if (response && response.data && response.data.ok) {
+				return "OK";
+			}
 		}
 	} catch (error) {
 		console.log(error);
@@ -117,6 +142,6 @@ exports.getMessages = async () => {
 			});
 		}
 	} catch (error) {
-		console.log(error);
+		// console.log(error);
 	}
 };

@@ -1,5 +1,33 @@
 const twitterGetUrl = require("twitter-url-direct");
 const telegram = require("./telegram");
+const puppeteer = require("puppeteer");
+const sharp = require("sharp");
+
+const getScreenshot = async (url) => {
+	const browser = await puppeteer.launch({
+		defaultViewport: {
+			width: 700,
+			height: 2000
+		}
+	});
+
+	const page = await browser.newPage();
+	await page.setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36");
+	await page.goto(url, { waitUntil: "networkidle2" });
+	const box = await page.evaluate(() => {
+		const articles = document.getElementsByTagName("article");
+		const box = articles[0].getBoundingClientRect();
+		return { width: box.width, height: box.height, top: box.top, left: box.left };
+	});
+
+	const screenshotEncoded = await page.screenshot({ encoding: "base64" });
+	const screenshot = Buffer.from(screenshotEncoded, "base64");
+	await browser.close();
+
+	const buffer = await sharp(screenshot).extract({ width: box.width, height: box.height, left: box.left, top: box.top }).toBuffer();
+
+	return buffer;
+};
 
 const getData = async (url) => {
 	try {
@@ -19,7 +47,10 @@ const getData = async (url) => {
 
 		return data;
 	} catch (error) {
-		console.error(error);
+		return {
+			type: "screenshot",
+			screenshot: await getScreenshot(url)
+		};
 	}
 };
 
@@ -41,6 +72,8 @@ const listenReceivers = async () => {
 						await telegram.sendVideo(chat_id, data.video, `@${data.user}: ${data.text}`);
 					} else if (data.type === "image") {
 						await telegram.sendPhoto(chat_id, data.image, `@${data.user}: ${data.text}`);
+					} else if (data.type === "screenshot") {
+						await telegram.sendPhoto(chat_id, data.screenshot, "");
 					}
 				} else {
 					await telegram.sendMessage(chat_id, "The given URL is invalid!");
